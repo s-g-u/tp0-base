@@ -207,7 +207,7 @@ Esto mostrará por consola los valores utilizados y generará el archivo **docke
 
 ### mi-generador.py
 
-El programa crea un archivo Docker Compose con un servidor y N clientes, validando que se reciba la cantidad correcta de argumentos y que el número de clientes sea un entero mayor o igual a 1. Si alguna de estas condiciones falla o no se puede guardar el archivo, termina la ejecución con error.
+El programa crea un archivo Docker Compose con un servidor y N clientes, validando que se reciba la cantidad correcta de argumentos y que el número de clientes sea un entero mayor o igual a 0. Si alguna de estas condiciones falla o no se puede guardar el archivo, termina la ejecución con error.
 
 ## Ejercicio 2
 

@@ -12,7 +12,7 @@ PYTHON_UNBUFFERED = "1"
 DRIVER = "default"
 
 FIRST_CLIENT_ID = 1
-MIN_CLIENTS = 1
+MIN_CLIENTS = 0
 EXPECTED_ARGS = 3   
 
 def generar_compose(clients):
