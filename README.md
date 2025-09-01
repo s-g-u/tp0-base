@@ -268,6 +268,16 @@ El cliente:
 
 El servidor loguea la apuesta y responde con **ACK** o **ERR**.
 
+## Manejo de short reads y short writes
+En TCP, aunque los mensajes llegan en orden, no siempre se envían o reciben completos de una sola vez. Por eso pueden aparecer problemas de **short writes** y **short reads**: el `send` puede escribir solo parte del mensaje, y el `recv` puede devolver solo parte de lo que envía el otro extremo.
+
+Para resolver esto en nuestro código hicimos lo siguiente:
+
+* Al enviar un mensaje, usamos un bucle que continúa enviando los bytes restantes hasta que todo el mensaje se haya transmitido. Así nos aseguramos de que el servidor reciba la apuesta completa.
+* Al leer un mensaje, acumulamos los datos en un buffer hasta encontrar el delimitador `\0`, que indica el final del mensaje. De esta forma reconstruimos el mensaje completo aunque TCP lo entregue en fragmentos.
+
+Con esto, los mensajes del cliente siempre llegan completos al servidor y las respuestas **ACK** se reciben solo cuando la apuesta se procesó correctamente. De esta manera se evitan errores por mensajes incompletos y la comunicación es confiable.
+
 **Ejecutar y ver logs:**
 
 ```bash
