@@ -178,3 +178,33 @@ Se espera que se redacte una sección del README en donde se indique cómo ejecu
 Se proveen [pruebas automáticas](https://github.com/7574-sistemas-distribuidos/tp0-tests) de caja negra. Se exige que la resolución de los ejercicios pase tales pruebas, o en su defecto que las discrepancias sean justificadas y discutidas con los docentes antes del día de la entrega. El incumplimiento de las pruebas es condición de desaprobación, pero su cumplimiento no es suficiente para la aprobación. Respetar las entradas de log planteadas en los ejercicios, pues son las que se chequean en cada uno de los tests.
 
 La corrección personal tendrá en cuenta la calidad del código entregado y casos de error posibles, se manifiesten o no durante la ejecución del trabajo práctico. Se pide a los alumnos leer atentamente y **tener en cuenta** los criterios de corrección informados  [en el campus](https://campusgrado.fi.uba.ar/mod/page/view.php?id=73393).
+
+# Informe
+
+## Ejercicio 1
+
+Se hizo un script en bash llamado **`generar-compose.sh`** que recibe dos parametros:
+
+1. Nombre del archivo de salida
+2. Cantidad de clientes
+
+El script llama al programa en python **`mi-generador.py`** para generar el docker-compose con esos datos.
+
+### Ejecución del script generar-compose.sh
+
+Antes de correr el script, asegurarse de que tenga permisos de ejecución:
+
+```bash
+chmod +x generar-compose.sh
+```
+Luego, se puede generar el archivo de Docker Compose pasando como parámetros el nombre del archivo de salida y la cantidad de clientes:
+
+```bash
+./generar-compose.sh docker-compose-dev.yaml 4
+```
+
+Esto mostrará por consola los valores utilizados y generará el archivo **docker-compose-dev.yaml** con 4 clientes.
+
+### mi-generador.py
+
+El programa crea un archivo Docker Compose con un servidor y N clientes, validando que se reciba la cantidad correcta de argumentos y que el número de clientes sea un entero mayor o igual a 1. Si alguna de estas condiciones falla o no se puede guardar el archivo, termina la ejecución con error.
