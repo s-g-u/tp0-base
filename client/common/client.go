@@ -4,6 +4,9 @@ import (
 	"bufio"
 	"fmt"
 	"net"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/op/go-logging"
@@ -23,6 +26,8 @@ type ClientConfig struct {
 type Client struct {
 	config ClientConfig
 	conn   net.Conn
+	signalChannel chan os.Signal 
+	is_running    bool          
 }
 
 // NewClient Initializes a new client receiving the configuration
@@ -30,13 +35,26 @@ type Client struct {
 func NewClient(config ClientConfig) *Client {
 	client := &Client{
 		config: config,
+		signalChannel: make(chan os.Signal, 1), 
+		is_running:    true,                    
 	}
+
+	signal.Notify(client.signalChannel, syscall.SIGTERM) 
+
 	return client
 }
 
-// CreateClientSocket Initializes client socket. In case of
-// failure, error is printed in stdout/stderr and exit 1
-// is returned
+// shutdownClientHandler listens SIGTERM and closes gracefully
+func (client *Client) shutdownClientHandler() {
+	<-client.signalChannel
+	if client.conn != nil {
+		client.conn.Close()
+	}
+	client.is_running = false
+	log.Infof("action: shutdown_client | result: success | client_id: %v", client.config.ID) 
+}
+
+// CreateClientSocket Initializes client socket
 func (c *Client) createClientSocket() error {
 	conn, err := net.Dial("tcp", c.config.ServerAddress)
 	if err != nil {
@@ -45,6 +63,7 @@ func (c *Client) createClientSocket() error {
 			c.config.ID,
 			err,
 		)
+		return err
 	}
 	c.conn = conn
 	return nil
@@ -52,11 +71,14 @@ func (c *Client) createClientSocket() error {
 
 // StartClientLoop Send messages to the client until some time threshold is met
 func (c *Client) StartClientLoop() {
-	// There is an autoincremental msgID to identify every message sent
-	// Messages if the message amount threshold has not been surpassed
-	for msgID := 1; msgID <= c.config.LoopAmount; msgID++ {
+	go c.shutdownClientHandler() 
+
+	for msgID := 1; msgID <= c.config.LoopAmount && c.is_running; msgID++ { 
 		// Create the connection the server in every loop iteration. Send an
-		c.createClientSocket()
+		err := c.createClientSocket()
+		if err != nil {
+			return
+		}
 
 		// TODO: Modify the send to avoid short-write
 		fmt.Fprintf(
@@ -64,7 +86,7 @@ func (c *Client) StartClientLoop() {
 			"[CLIENT %v] Message N°%v\n",
 			c.config.ID,
 			msgID,
-		)
+		)		
 		msg, err := bufio.NewReader(c.conn).ReadString('\n')
 		c.conn.Close()
 
