@@ -213,3 +213,11 @@ El programa crea un archivo Docker Compose con un servidor y N clientes, validan
 
 Se actualizó el script mi-generador.py, para montar los archivos de configuración del cliente (config.yaml) y del servidor (config.ini) como volúmenes. De este modo, cualquier modificación realizada en estos archivos se aplica automáticamente dentro de los containers, sin tener que reconstruir las imágenes de Docker.
 
+## Ejercicio 3
+
+El script validar-echo-server.sh prueba que el servidor echo responde correctamente enviándole un mensaje de prueba usando nc dentro de la red Docker tp0_testing_net. Imprime success si la respuesta coincide con el mensaje enviado, y fail en caso contrario.
+
+El script se ejecuta con:
+```bash
+./validar-echo-server.sh
+```
