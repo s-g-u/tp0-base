@@ -8,7 +8,6 @@ SUBNET = "172.25.125.0/24"
 
 SERVER_ENTRYPOINT = "python3 /main.py"
 CLIENT_ENTRYPOINT = "/client"
-LOGGING_LEVEL = "DEBUG"
 PYTHON_UNBUFFERED = "1"
 DRIVER = "default"
 
@@ -29,9 +28,10 @@ def generar_compose(clients):
         f"    entrypoint: {SERVER_ENTRYPOINT}",
         "    environment:",
         f"      - PYTHONUNBUFFERED={PYTHON_UNBUFFERED}",
-        f"      - LOGGING_LEVEL={LOGGING_LEVEL}",
         "    networks:",
-        f"      - {NETWORK_NAME}"
+        f"      - {NETWORK_NAME}",
+        "    volumes:",
+        "      - ./server/config.ini:/config.ini"
     ]
 
     for i in range(FIRST_CLIENT_ID, clients + 1):
@@ -42,11 +42,12 @@ def generar_compose(clients):
             f"    entrypoint: {CLIENT_ENTRYPOINT}",
             "    environment:",
             f"      - CLI_ID={i}",
-            f"      - CLI_LOG_LEVEL={LOGGING_LEVEL}",
             "    networks:",
             f"      - {NETWORK_NAME}",
             "    depends_on:",
-            "      - server"
+            "      - server",
+            "    volumes:",
+            f"      - ./client/config.yaml:/config.yaml"
         ]
         lines.extend(client_block)
 
