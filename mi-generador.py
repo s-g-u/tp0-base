@@ -5,7 +5,6 @@ SERVER_IMAGE = "server:latest"
 CLIENT_IMAGE = "client:latest"
 NETWORK_NAME = "testing_net"
 SUBNET = "172.25.125.0/24"
-
 SERVER_ENTRYPOINT = "python3 /main.py"
 CLIENT_ENTRYPOINT = "/client"
 PYTHON_UNBUFFERED = "1"
@@ -15,15 +14,24 @@ FIRST_CLIENT_ID = 1
 MIN_CLIENTS = 0
 EXPECTED_ARGS = 3   
 
+NAMES = ["MARTA", "JULIAN", "SOFIA", "CARLOS", "LAURA"]
+SURNAMES = ["PEREZ", "GOMEZ", "RODRIGUEZ", "FERNANDEZ", "MARTINEZ"]
+DNIS = ["10234567", "20345678", "30456789", "40567890", "50678901"]
+BIRTHDATES = ["1985-03-21", "1990-07-15", "1995-11-30", "1980-06-05", "1992-12-12"]
+NUMBERS = ["9876", "1234", "5678", "4321", "8765"]
+
+
 def generar_compose(clients):
     if clients < MIN_CLIENTS:
-        raise ValueError("La cantidad de clientes debe ser mayor o igual a 1")
+        raise ValueError("La cantidad de clientes debe ser mayor o igual a 0")
+    if clients > len(NAMES):
+        raise ValueError("No hay suficientes datos de clientes para generar ese número")
 
     lines = [
         f"name: {NAME}",
         "services:",
         "  server:",
-        "    container_name: server",
+        f"    container_name: server",
         f"    image: {SERVER_IMAGE}",
         f"    entrypoint: {SERVER_ENTRYPOINT}",
         "    environment:",
@@ -42,6 +50,11 @@ def generar_compose(clients):
             f"    entrypoint: {CLIENT_ENTRYPOINT}",
             "    environment:",
             f"      - CLI_ID={i}",
+            f"      - CLI_NOMBRE={NAMES[i-1]}",
+            f"      - CLI_APELLIDO={SURNAMES[i-1]}",
+            f"      - CLI_DOCUMENTO={DNIS[i-1]}",
+            f"      - CLI_NACIMIENTO={BIRTHDATES[i-1]}",
+            f"      - CLI_NUMERO={NUMBERS[i-1]}",
             "    networks:",
             f"      - {NETWORK_NAME}",
             "    depends_on:",
@@ -55,8 +68,8 @@ def generar_compose(clients):
         "networks:",
         f"  {NETWORK_NAME}:",
         "    ipam:",
-        f"     driver: {DRIVER}",
-        "     config:",
+        f"      driver: {DRIVER}",
+        "      config:",
         f"        - subnet: {SUBNET}"
     ]
     lines.extend(network_block)
@@ -74,7 +87,7 @@ def guardar_compose(path, clients):
 
 def main():
     if len(sys.argv) != EXPECTED_ARGS:
-        print("La forma correcta de ejecutar el programa es: python3 mi-generador.py <archivo_salida> <cantidad_clientes>")
+        print(f"La forma correcta de ejecutar el programa es: python3 {sys.argv[0]} <archivo_salida> <cantidad_clientes>")
         sys.exit(1)
 
     output_file = sys.argv[1]

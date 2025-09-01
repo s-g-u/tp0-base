@@ -1,6 +1,34 @@
 import socket
 import logging
 import signal
+from common.connection import send, read_up_to_delimiter
+NUM_BET_FIELDS = 6
+
+class Bet:
+    """Internal class to represent a bet"""
+    def __init__(self, agency, name, surname, dni, birthdate, number):
+        self.agency = agency
+        self.name = name
+        self.surname = surname
+        self.dni = dni
+        self.birthdate = birthdate
+        self.number = number
+
+    @staticmethod
+    def from_message(msg: str):
+        """Creates a Bet from a semicolon-separated string"""
+        parts = msg.split(";")
+        if len(parts) != NUM_BET_FIELDS:
+            raise ValueError("Bad message, 6 fields were expected")
+        agency, name, surname, dni, birthdate, number = parts
+        if not agency.isdigit() or not number.isdigit():
+            raise ValueError("Fields agency y number should be numbers")
+        return Bet(agency, name, surname, dni, birthdate, number)
+
+#dummy 
+def store_bets(bets):
+    for bet in bets:
+        logging.info(f"Stored bet: dni={bet.dni}, number={bet.number}")
 
 class Server:
     def __init__(self, port, listen_backlog):
@@ -38,14 +66,18 @@ class Server:
         client socket will also be closed
         """
         try:
-            # TODO: Modify the receive to avoid short-reads
-            msg = self._last_client_socket.recv(1024).rstrip().decode('utf-8')
-            addr = self._last_client_socket.getpeername()
-            logging.info(f'action: receive_message | result: success | ip: {addr[0]} | msg: {msg}')
-            # TODO: Modify the send to avoid short-writes
-            self._last_client_socket.send(f"{msg}\n".encode('utf-8'))
+            raw_message = read_up_to_delimiter(self._last_client_socket, "\0")
+            logging.info(f"action: reading_bet | result: success | message: {raw_message}")
+            bet = Bet.from_message(raw_message)
+            store_bets([bet])
+            logging.info(f"action: apuesta_almacenada | result: success | dni: {bet.dni} | numero: {bet.number}")
+            send(self._last_client_socket, "ACK")
         except OSError as e:
             logging.error(f"action: receive_message | result: fail | error: {e}")
+            try:
+                send(self._last_client_socket, "ERR")
+            except Exception:
+                pass
         finally:
             self._last_client_socket.close()
             self._last_client_socket = None
