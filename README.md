@@ -221,3 +221,7 @@ El script se ejecuta con:
 ```bash
 ./validar-echo-server.sh
 ```
+
+## Ejercicio 4
+
+Tanto el servidor como el cliente fueron modificados para soportar un apagado ordenado al recibir SIGTERM. Esto asegura que los sockets se cierren correctamente y no queden recursos abiertos. La prueba se realiza levantando los servicios con docker-compose up, siguiendo los logs en otra terminal, y finalmente ejecutando docker-compose down para verificar que ambos procesos se cierran de forma limpia.
