@@ -55,7 +55,7 @@ def generar_compose(clients):
         f"  {NETWORK_NAME}:",
         "    ipam:",
         f"     driver: {DRIVER}",
-        "      config:",
+        "     config:",
         f"        - subnet: {SUBNET}"
     ]
     lines.extend(network_block)
