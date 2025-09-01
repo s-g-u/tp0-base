@@ -225,3 +225,61 @@ El script se ejecuta con:
 ## Ejercicio 4
 
 Tanto el servidor como el cliente fueron modificados para soportar un apagado ordenado al recibir SIGTERM. Esto asegura que los sockets se cierren correctamente y no queden recursos abiertos. La prueba se realiza levantando los servicios con docker-compose up, siguiendo los logs en otra terminal, y finalmente ejecutando docker-compose down para verificar que ambos procesos se cierran de forma limpia.
+
+### Parte 2
+
+En esta parte se cambio el cliente y el servidor para que se puedan enviar y recibir apuestas.
+
+**Protocolo de comunicación:**
+
+* Texto con delimitador `\0` para marcar el fin del mensaje.
+* Se uso TCP para asegurar que los mensajes lleguen completos y en orden.
+
+**Mensajes:**
+
+*Cliente → Servidor:*
+
+```
+agency;name;surname;dni;birthdate;number
+```
+
+Para enviar la apuesta, el cliente toma todos los datos desde variables de entorno:
+* `CLI_ID` → identifica la agencia o cliente.
+* `CLI_NOMBRE` → nombre del apostador.
+* `CLI_APELLIDO` → apellido del apostador.
+* `CLI_DOCUMENTO` → DNI del apostador.
+* `CLI_NACIMIENTO` → fecha de nacimiento del apostador.
+* `CLI_NUMERO` → número de la apuesta que envía.
+
+*Servidor → Cliente:*
+
+* `ACK` si la apuesta se guardó.
+* `ERR;cantidad` si hubo error.
+
+
+### Ejercicio 5
+
+El cliente:
+
+1. Se conecta al servidor vía TCP.
+2. Toma los datos de la apuesta desde todas las variables de entorno listadas arriba.
+3. Envía la apuesta y espera **ACK**.
+4. Muestra resultado y termina.
+
+El servidor loguea la apuesta y responde con **ACK** o **ERR**.
+
+**Ejecutar y ver logs:**
+
+```bash
+make docker-compose-up
+make docker-compose-logs
+```
+
+Ejemplo de logs:
+
+```
+client1  | action: apuesta_enviada | result: success | dni: 10234567 | numero: 9876
+server   | action: reading_bet | result: success | message: 1;MARTA;PEREZ;10234567;1985-03-21;9876
+server   | Stored bet: dni=10234567, number=9876
+server   | action: apuesta_almacenada | result: success | dni: 10234567 | numero: 9876
+```
