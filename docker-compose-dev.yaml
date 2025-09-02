@@ -10,12 +10,18 @@ services:
       - testing_net
     volumes:
       - ./server/config.ini:/config.ini
+      - ./.data:/.data
   client1:
     container_name: client1
     image: client:latest
     entrypoint: /client
     environment:
       - CLI_ID=1
+      - CLI_NOMBRE=MARTA
+      - CLI_APELLIDO=PEREZ
+      - CLI_DOCUMENTO=10234567
+      - CLI_NACIMIENTO=1985-03-21
+      - CLI_NUMERO=9876
     networks:
       - testing_net
     depends_on:
@@ -25,6 +31,6 @@ services:
 networks:
   testing_net:
     ipam:
-     driver: default
-     config:
+      driver: default
+      config:
         - subnet: 172.25.125.0/24

@@ -60,7 +60,8 @@ def generar_compose(clients):
             "    depends_on:",
             "      - server",
             "    volumes:",
-            f"      - ./client/config.yaml:/config.yaml"
+            f"      - ./client/config.yaml:/config.yaml",
+            f"      - ./.data:/.data",
         ]
         lines.extend(client_block)
 
