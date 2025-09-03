@@ -12,7 +12,6 @@ class Server:
         self._server_socket.bind(('', port))
         self._server_socket.listen(listen_backlog)
         self._is_running = True
-        self._last_client_socket = None
         self._completed_agencies = set()
         self._clients = clients
         self._lock = threading.Lock()
@@ -27,9 +26,9 @@ class Server:
             while self._is_running:
                 client_socket = self.__accept_new_connection()
                 if client_socket:
-                    self._last_client_socket = client_socket
                     threading.Thread(
                         target=self.__handle_client_connection,
+                        args=(client_socket,),
                         daemon=True
                     ).start()
         except Exception as e:
@@ -37,12 +36,11 @@ class Server:
         finally:
             self.__shutdown_server(None, None)
 
-    def __handle_client_connection(self):
+    def __handle_client_connection(self,sock):
         """
         Handles communication with a single client: receives data, processes it, and sends a response.
         This runs in a separate thread for each client.
         """
-        sock = self._last_client_socket
         reply = None
         try:
             incoming = read_up_to_delimiter(sock, "\0")
@@ -78,8 +76,12 @@ class Server:
         finally:
             try:
                 sock.close()
+            except Exception as e:
+                logging.error(f"action: close_socket | result: fail | error: {e}")
             finally:
-                self._last_client_socket = None
+                logging.info("action: shutdown_client | result: success")
+
+
 
     def __get_winners(self, message): 
             """
@@ -148,10 +150,5 @@ class Server:
             self._server_socket.close()
             self._server_socket = None
             logging.info("action: shutdown_server | result: success")
-
-        if self._last_client_socket:
-            self._last_client_socket.close()
-            self._last_client_socket = None
-            logging.info("action: shutdown_client | result: success")
 
         logging.info("action: shutdown | result: success")
