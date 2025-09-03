@@ -197,35 +197,46 @@ func (client *Client) StartClientLoop() {
 	}
 }
 
-// waitForWinners waits until WINNERS is received using a ticker-based loop
+// waitForWinners waits until WINNERS is received
 func (client *Client) waitForWinners() error {
-	interval := client.config.LoopPeriod
-	for attempts := 1; attempts <= MAX_WAITS; attempts++ {
-		ticker := time.NewTicker(interval)
-		<-ticker.C
-		ticker.Stop()
+	resultCh := make(chan string, 1)
+	errorCh := make(chan error, 1)
 
-		if err := client.createClientSocket(); err != nil {
-			return err
+	go func() {
+		for attempts := 1; attempts <= MAX_WAITS; attempts++ {
+			if err := client.createClientSocket(); err != nil {
+				errorCh <- err
+				return
+			}
+
+			raw, err := client.getWinners()
+			client.conn.Close()
+			if err != nil {
+				errorCh <- err
+				return
+			}
+
+			if strings.HasPrefix(raw, WINNERS_MESSAGE) {
+				resultCh <- raw
+				return
+			}
+
+			time.Sleep(client.config.LoopPeriod * (1 << (attempts - 1)))
 		}
 
-		raw, err := client.getWinners()
-		client.conn.Close()
-		if err != nil {
-			return err
-		}
+		errorCh <- fmt.Errorf("max waits exceeded")
+	}()
 
+	select {
+	case raw := <-resultCh:
 		client.handleServerResponse(raw)
-		if strings.HasPrefix(raw, WINNERS_MESSAGE) {
-			return nil
-		}
-
-		// increase wait time exponentially
-		interval *= 2
+		return nil
+	case err := <-errorCh:
+		return err
+	case <-client.signalChannel:
+		client.is_running = false
+		return fmt.Errorf("client shutdown")
 	}
-
-	log.Errorf("action: wait_for_winners | result: fail | client_id: %v", client.config.ID)
-	return fmt.Errorf("max waits exceeded")
 }
 
 
