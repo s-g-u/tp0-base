@@ -359,7 +359,7 @@ server   | 2025-09-03 06:52:33 INFO     action: apuesta_recibida | result: succe
 
 Esto confirma que los clientes generan y envían *batchs* de tamaño 10, y que el servidor los procesa de manera correcta, manteniendo la lógica de validación y persistencia definida por el protocolo.
 
-### Ejercicio 7:
+## Ejercicio 7:
 
 El objetivo de este ejercicio fue modificar el sistema cliente-servidor para que los clientes notifiquen al servidor una vez que hayan enviado todas sus apuestas, y luego puedan consultar los resultados del sorteo correspondientes a su agencia. El servidor debe esperar la notificación de todas las agencias antes de realizar el sorteo, garantizando que no se compartan resultados parciales con los clientes.
 
@@ -446,3 +446,66 @@ Del log que se obtuvo se puede observar:
   ```
   client1  | 2025-09-03 07:03:55 INFO     action: consulta_ganadores | result: success | cant_ganadores: 2
   ```
+
+## Parte 3:
+
+## Ejercicio 8
+
+Se busca modificar el servidor para que pueda **aceptar múltiples conexiones de clientes y procesar sus mensajes en paralelo**.
+
+### Implementación
+
+* Servidor en **Python** con **multithreading**, creando un hilo independiente por cada cliente.
+
+### 3. Sincronización
+
+* Se utiliza un **Lock** (`threading.Lock`) para proteger:
+
+  * Escritura y lectura de apuestas (`store_bets` y `load_bets`).
+  * Actualización del conjunto `_completed_agencies`.
+* Ejemplo de uso del lock:
+
+```python
+with self._lock:
+    store_bets(apuestas)
+```
+
+* Cada conexión se maneja en un hilo **daemon**, permitiendo que el servidor siga aceptando conexiones mientras procesa otras en paralelo.
+
+
+### **Ejecutar y ver logs:**
+
+```bash
+make docker-compose-up
+make docker-compose-logs
+```
+
+**Recepción de apuestas de un cliente:**
+
+```
+server   | 2025-09-03 07:40:20 INFO action: apuesta_recibida | result: success | cantidad: 10
+```
+
+**Consulta de ganadores cuando no todas las agencias respondieron:**
+
+```
+server   | 2025-09-03 07:40:20 INFO action: no_winner | result: success
+```
+
+**Consulta de ganadores y envío de resultados:**
+
+```
+server   | 2025-09-03 07:40:20 INFO action: lottery | result: success
+```
+
+**Aceptación de conexiones en paralelo:**
+
+```
+server   | 2025-09-03 07:40:20 INFO action: accept_connections | result: success | ip: 172.25.125.3
+```
+
+**Cierre de cliente tras procesar mensaje:**
+
+```
+server   | 2025-09-03 07:40:20 INFO action: shutdown_client | result: success
+```
