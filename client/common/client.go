@@ -13,7 +13,6 @@ import (
 )
 
 
-const MAX_BATCH_MEMORY = 8192
 const MAX_WAITS = 10
 
 var log = logging.MustGetLogger("log")
@@ -27,15 +26,6 @@ type ClientConfig struct {
 	Batchs        int
 }
 
-// Bet represents a bet message
-type Bet struct {
-	Agency    string
-	Name      string
-	Surname   string
-	DNI       string
-	Birthdate string
-	Number    string
-}
 
 // Client Entity that encapsulates client behavior
 type Client struct {
