@@ -10,7 +10,6 @@ import (
 	"github.com/op/go-logging"
 )
 
-const ACK = "ACK"
 
 var log = logging.MustGetLogger("log")
 
@@ -20,16 +19,6 @@ type ClientConfig struct {
 	ServerAddress string
     LoopAmount    int           
     LoopPeriod    time.Duration
-}
-
-// Bet represents a bet message
-type Bet struct {
-	Agency    string
-	Name      string
-	Surname   string
-	DNI       string
-	Birthdate string
-	Number    string
 }
 
 // Client Entity that encapsulates client behavior
@@ -128,9 +117,4 @@ func (c *Client) sendBetAndWait(bet Bet) error {
 	}
 
 	return nil
-}
-
-// serializeBet converts a Bet into a semicolon-separated string
-func serializeBet(b Bet) string {
-	return fmt.Sprintf("%s;%s;%s;%s;%s;%s", b.Agency, b.Name, b.Surname, b.DNI, b.Birthdate, b.Number)
 }
