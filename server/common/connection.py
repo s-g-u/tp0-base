@@ -1,3 +1,4 @@
+BUFFER_SIZE = 1024
 def send(connection, message):
     """
     Send a message ensuring full delivery, appending a null character at the end.
@@ -21,7 +22,7 @@ def read_up_to_delimiter(connection, delimiter):
     delimiter_bytes = delimiter.encode("utf-8")
 
     while True:
-        data = connection.recv(1024)
+        data = connection.recv(BUFFER_SIZE)
         if not data:
             raise RuntimeError("Socket closed unexpectedly while reading")
         buffer.extend(data)
