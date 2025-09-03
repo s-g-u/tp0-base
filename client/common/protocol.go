@@ -4,12 +4,23 @@ import (
 	"strings"
 )
 
+const MAX_BATCH_MEMORY = 8192
+
 const ACK_MESSAGE = "ACK"
 const NOWINNER_MESSAGE = "NOWINNER"
 const ERR_MESSAGE = "ERR"
 const WINNERS_MESSAGE = "WINNERS"
 const WRONG_MESSAGE = "WRONG"
 
+// Bet represents a bet message
+type Bet struct {
+	Agency    string
+	Name      string
+	Surname   string
+	DNI       string
+	Birthdate string
+	Number    string
+}
 
 // handleServerResponse processes raw server response without using structs
 func (client *Client) handleServerResponse(reply string) {
