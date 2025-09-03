@@ -23,7 +23,7 @@ def read_up_to_delimiter(connection, delimiter):
     while True:
         data = connection.recv(1024)
         if not data:
-            raise RuntimeError("Socket closed unexpectedly while reading")
+            raise ConnectionResetError("Socket closed unexpectedly while reading")
         buffer.extend(data)
 
         pos = buffer.find(delimiter_bytes)

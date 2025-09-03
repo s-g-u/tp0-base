@@ -1,22 +1,20 @@
 import socket
 import logging
 import signal
-
-from common.utils import Bet, store_bets
+from common.utils import Bet,store_bets, load_bets, has_won
 from common.connection import send, read_up_to_delimiter
 
-
 class Server:
-    def __init__(self, port, listen_backlog):
+    def __init__(self, port, listen_backlog, clients):
         # Initialize server socket
         self._server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._server_socket.bind(('', port))
         self._server_socket.listen(listen_backlog)
-
         self._is_running = True
         self._last_client_socket = None
+        self._completed_agencies = set()
+        self._clients = clients
 
-        # graceful shutdown on SIGTERM
         signal.signal(signal.SIGTERM, self.__shutdown_server)
 
     def run(self):
@@ -35,73 +33,93 @@ class Server:
             self.__shutdown_server(None, None)
 
     def __handle_client_connection(self):
+         """
+        Handles communication with a single client: receives data, processes it, and sends a response.
+        The socket is always closed at the end, regardless of the outcome.
         """
-        Handle bets from one client, send response, and close socket
-        """
+        sock = self._last_client_socket
+        reply = None
         try:
-            bets, invalid_count = self.__read_bets()
-            valid_count = len(bets)
+            incoming = read_up_to_delimiter(sock, "\0")
 
-            # Store valid bets
-            if valid_count:
-                store_bets(bets)
-
-            # Log and respond
-            if invalid_count > 0:
-                logging.error(
-                    f"action: apuesta_recibida | result: partial_fail | valid: {valid_count} | invalid: {invalid_count}"
-                )
-                send(self._last_client_socket, f"ERR;{invalid_count}")
+            if incoming.startswith("GETWINNERS"):
+                reply = self.__get_winners(incoming)
             else:
-                logging.info(
-                    f"action: apuesta_recibida | result: success | cantidad: {valid_count}"
-                )
-                send(self._last_client_socket, "ACK")
+                apuestas, errores = self.__get_bets(incoming)
+                store_bets(apuestas)
 
-        except (ConnectionResetError, OSError) as e:
-            logging.error(f"action: client_connection | result: fail | error: {e}")
-            try:
-                send(self._last_client_socket, "ERR")
-            except Exception:
-                pass
+                if errores:
+                    logging.error(
+                        f"action: apuesta_recibida | result: fail  | cantidad: {errores}"
+                    )
+                    reply = f"ERR;{errores}"
+                else:
+                    logging.info(
+                        f"action: apuesta_recibida | result: success | cantidad: {len(apuestas)}"
+                    )
+                    reply = "ACK"
+
+            if reply is not None:
+                send(sock, reply)
+
+        except ConnectionResetError:
+            logging.info(
+                "action: server_run | result: success | message: the socket has closed"
+            )
+        except OSError as err:
+            logging.error(f"action: receive_message | result: fail | error: {err}")
         finally:
-            self._last_client_socket.close()
-            self._last_client_socket = None
+            try:
+                sock.close()
+            finally:
+                self._last_client_socket = None
 
-    def __read_bets(self):
+    
+    def __get_winners(self, message): 
+            """
+            Get the Winners bets from a Message in the format WINNERS;AGENCY_NUMBER
+            from the bets stored
+            """
+            values = message.split(";")
+            
+            self._completed_agencies.add(values[1])
+            if len(self._completed_agencies) != self._clients:
+                logging.info("action: no_winner | result: success")
+                return "NOWINNER"
+            else:
+                message = "WINNERS;"
+                for bet in load_bets():
+                    if has_won(bet):
+                        if bet.agency == int(values[1]):
+                            message = message + bet.document + ";"
+                logging.info(f"action: lottery | result: success")
+                return message[:-1]
+        
+    def __get_bets(self, raw_message):
         """
-        Reads a batch of bets until null delimiter.
-        Returns a tuple: (list_of_bets, errors_count)
+        Converts a raw bets message into a list of Bet objects,
+        while counting any lines that failed validation.
         """
-        data = read_up_to_delimiter(self._last_client_socket, "\0")
-        bets = []
+        valid_bets = []
         errors = 0
 
-        for line in filter(None, data.split("\n")):
-            bet = self.__parse_bet_line(line)
-            if bet:
-                bets.append(bet)
-            else:
+        lines = raw_message.strip().splitlines()
+        for line in lines:
+            parts = line.strip().split(";")
+            
+            if len(parts) != 6:
                 errors += 1
+                continue
 
-        return bets, errors
+            agency, name, surname, dni, birthdate, number = parts
 
-    def __parse_bet_line(self, line):
-        """
-        Parse a single line and return a Bet object.
-        Returns None if parsing fails.
-        """
-        fields = line.strip().split(";")
-        if len(fields) != 6:
-            logging.warning(f"action: parse_bet | result: fail | line: {line}")
-            return None
+            if not (agency.isdigit() and number.isdigit()):
+                errors += 1
+                continue
 
-        agency, name, surname, dni, birthdate, number = fields
-        if not agency.isdigit() or not number.isdigit():
-            logging.warning(f"action: parse_bet | result: fail | invalid agency/number | line: {line}")
-            return None
+            valid_bets.append(Bet(agency, name, surname, dni, birthdate, number))
 
-        return Bet(agency, name, surname, dni, birthdate, number)
+        return valid_bets, errors
 
     def __accept_new_connection(self):
         """

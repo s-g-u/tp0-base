@@ -6,11 +6,11 @@ services:
     entrypoint: python3 /main.py
     environment:
       - PYTHONUNBUFFERED=1
+      - TOTAL_AGENCIES=5
     networks:
       - testing_net
     volumes:
       - ./server/config.ini:/config.ini
-      - ./.data:/.data
   client1:
     container_name: client1
     image: client:latest
@@ -28,6 +28,79 @@ services:
       - server
     volumes:
       - ./client/config.yaml:/config.yaml
+      - ./.data:/.data
+  client2:
+    container_name: client2
+    image: client:latest
+    entrypoint: /client
+    environment:
+      - CLI_ID=2
+      - CLI_NOMBRE=JULIAN
+      - CLI_APELLIDO=GOMEZ
+      - CLI_DOCUMENTO=20345678
+      - CLI_NACIMIENTO=1990-07-15
+      - CLI_NUMERO=1234
+    networks:
+      - testing_net
+    depends_on:
+      - server
+    volumes:
+      - ./client/config.yaml:/config.yaml
+      - ./.data:/.data
+  client3:
+    container_name: client3
+    image: client:latest
+    entrypoint: /client
+    environment:
+      - CLI_ID=3
+      - CLI_NOMBRE=SOFIA
+      - CLI_APELLIDO=RODRIGUEZ
+      - CLI_DOCUMENTO=30456789
+      - CLI_NACIMIENTO=1995-11-30
+      - CLI_NUMERO=5678
+    networks:
+      - testing_net
+    depends_on:
+      - server
+    volumes:
+      - ./client/config.yaml:/config.yaml
+      - ./.data:/.data
+  client4:
+    container_name: client4
+    image: client:latest
+    entrypoint: /client
+    environment:
+      - CLI_ID=4
+      - CLI_NOMBRE=CARLOS
+      - CLI_APELLIDO=FERNANDEZ
+      - CLI_DOCUMENTO=40567890
+      - CLI_NACIMIENTO=1980-06-05
+      - CLI_NUMERO=4321
+    networks:
+      - testing_net
+    depends_on:
+      - server
+    volumes:
+      - ./client/config.yaml:/config.yaml
+      - ./.data:/.data
+  client5:
+    container_name: client5
+    image: client:latest
+    entrypoint: /client
+    environment:
+      - CLI_ID=5
+      - CLI_NOMBRE=LAURA
+      - CLI_APELLIDO=MARTINEZ
+      - CLI_DOCUMENTO=50678901
+      - CLI_NACIMIENTO=1992-12-12
+      - CLI_NUMERO=8765
+    networks:
+      - testing_net
+    depends_on:
+      - server
+    volumes:
+      - ./client/config.yaml:/config.yaml
+      - ./.data:/.data
 networks:
   testing_net:
     ipam:

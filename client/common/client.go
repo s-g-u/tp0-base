@@ -1,9 +1,7 @@
 package common
 
 import (
-	"bufio"
 	"fmt"
-	"io"
 	"net"
 	"os"
 	"os/signal"
@@ -14,8 +12,14 @@ import (
 	"github.com/op/go-logging"
 )
 
-const ACK = "ACK"
+const ACK_MESSAGE = "ACK"
+const NOWINNER_MESSAGE = "NOWINNER"
+const ERR_MESSAGE = "ERR"
+const WINNERS_MESSAGE = "WINNERS"
+const WRONG_MESSAGE = "WRONG"
+
 const MAX_BATCH_MEMORY = 8192
+const MAX_WAITS = 10
 
 var log = logging.MustGetLogger("log")
 
@@ -59,6 +63,124 @@ func NewClient(config ClientConfig) *Client {
 	return c
 }
 
+// createBatch reads lines from a slice of strings and returns a batch as []Bet
+func (client *Client) createBatch(lines []string, startIndex *int) ([]Bet, error) {
+	batch := make([]Bet, 0, client.config.Batchs)
+	usedMem := 0
+
+	for *startIndex < len(lines) && len(batch) < client.config.Batchs {
+		line := strings.TrimSpace(lines[*startIndex])
+		*startIndex++
+
+		if line == "" {
+			continue
+		}
+
+		parts := strings.Split(line, ",")
+		if len(parts) != 5 {
+			continue
+		}
+
+		newBet := Bet{
+			Agency:    client.config.ID,
+			Name:      parts[0],
+			Surname:   parts[1],
+			DNI:       parts[2],
+			Birthdate: parts[3],
+			Number:    parts[4],
+		}
+
+		if usedMem+newBet.size() > MAX_BATCH_MEMORY {
+			client.lastLine = line
+			break
+		}
+
+		batch = append(batch, newBet)
+		usedMem += newBet.size()
+	}
+
+	return batch, nil
+}
+
+// sendBatch sends a slice of bets to the server and waits for a response
+func (client *Client) sendBatch(batch []Bet) error {
+	payload := serializeBatch(batch)
+
+	if err := send(client.conn, payload); err != nil {
+		log.Errorf("action: send_message | result: fail | client_id: %v | error: %v",
+			client.config.ID, err)
+		return err
+	}
+
+	reply, err := readUpToDelimiter(client.conn, "\000")
+	if err != nil {
+		log.Errorf("action: receive_message | result: fail | client_id: %v | error: %v",
+			client.config.ID, err)
+		return err
+	}
+
+	client.handleServerResponse(reply)
+	return nil
+}
+
+// handleServerResponse processes raw server response without using structs
+func (client *Client) handleServerResponse(reply string) {
+	switch {
+	case strings.HasPrefix(reply, ACK_MESSAGE):
+		log.Infof("action: batch_send | result: success")
+
+	case strings.HasPrefix(reply, NOWINNER_MESSAGE):
+		log.Infof("action: sleeping | result: success")
+
+	case strings.HasPrefix(reply, ERR_MESSAGE):
+		parts := strings.Split(reply, ";")
+		if len(parts) == 2 {
+			log.Errorf("action: receive_message | result: fail | number_of_errors: %s", parts[1])
+		} else {
+			log.Errorf("action: receive_message | result: fail | message: malformed_error")
+		}
+
+	case strings.HasPrefix(reply, WINNERS_MESSAGE):
+		winners := strings.Split(reply, ";")
+		log.Infof("action: consulta_ganadores | result: success | cant_ganadores: %d", len(winners)-1)
+
+	default:
+		log.Errorf("action: receive_message | result: fail | message: wrong_message_received")
+	}
+}
+
+// sendBatches reads lines and sends all batches sequentially
+func (client *Client) sendBatchesFromFile(lines []string) error {
+	startIndex := 0
+	for client.is_running {
+		if err := client.createClientSocket(); err != nil {
+			log.Criticalf("action: connect | result: fail | client_id: %v | error: %v",
+				client.config.ID, err)
+			return err
+		}
+
+		defer client.conn.Close()
+
+		batch, err := client.createBatch(lines, &startIndex)
+		if err != nil {
+			log.Errorf("action: create_batch | result: fail | client_id: %v | error: %v",
+				client.config.ID, err)
+			return err
+		}
+
+		if len(batch) == 0 {
+			break
+		}
+
+		if err := client.sendBatch(batch); err != nil {
+			log.Errorf("action: send_batch | result: fail | client_id: %v | error: %v",
+				client.config.ID, err)
+			return err
+		}
+	}
+	return nil
+}
+
 // shutdownClientHandler listens SIGTERM and closes gracefully
 func (client *Client) shutdownClientHandler() {
 	<-client.signalChannel
@@ -84,118 +206,80 @@ func (c *Client) createClientSocket() error {
 func (client *Client) StartClientLoop() {
 	go client.shutdownClientHandler()
 
-	path := fmt.Sprintf("/.data/agency-%v.csv", client.config.ID)
-	file, err := os.Open(path)
+	filepath := fmt.Sprintf("/.data/agency-%v.csv", client.config.ID)
+	content, err := os.ReadFile(filepath)
 	if err != nil {
-		log.Errorf("action: open_file | result: fail | client_id: %v | error: %v", client.config.ID, err)
+		log.Errorf("action: read_file | result: fail | client_id: %v | error: %v",
+			client.config.ID, err)
 		return
 	}
-	defer file.Close()
 
-	reader := bufio.NewReader(file)
-	batchChan := make(chan []Bet)
+	lines := strings.Split(string(content), "\n")
 
-	go client.batchProducer(reader, batchChan)
+	if err := client.sendBatchesFromFile(lines); err != nil {
+		log.Errorf("action: sending_batches | result: fail | client_id: %v | error: %v",
+			client.config.ID, err)
+		return
+	}
 
-	for batch := range batchChan {
+	if err := client.waitForWinners(); err != nil {
+		log.Errorf("action: waiting_for_winners | result: fail | client_id: %v | error: %v",
+			client.config.ID, err)
+	}
+}
+
+// waitForWinners waits until WINNERS is received using a ticker-based loop
+func (client *Client) waitForWinners() error {
+	interval := client.config.LoopPeriod
+	for attempts := 1; attempts <= MAX_WAITS; attempts++ {
+		ticker := time.NewTicker(interval)
+		<-ticker.C
+		ticker.Stop()
+
 		if err := client.createClientSocket(); err != nil {
-			return
+			return err
 		}
 
-		payload := serializeBatch(batch)
-		if err := send(client.conn, payload); err != nil {
-			log.Errorf("action: send_batch | result: fail | client_id: %v | error: %v", client.config.ID, err)
-			client.conn.Close()
-			return
-		}
-
-		resp, err := readUpToDelimiter(client.conn, "\000")
+		raw, err := client.getWinners()
 		client.conn.Close()
 		if err != nil {
-			log.Errorf("action: receive_ack | result: fail | client_id: %v | error: %v", client.config.ID, err)
-			return
+			return err
 		}
 
-		if resp == ACK {
-			log.Infof("action: batch_sent | result: success | client_id: %v | batch_size: %d", client.config.ID, len(batch))
-		} else {
-			log.Errorf("action: batch_sent | result: fail | client_id: %v | message: %v", client.config.ID, resp)
-			return
+		client.handleServerResponse(raw)
+		if strings.HasPrefix(raw, WINNERS_MESSAGE) {
+			return nil
 		}
 
-		time.Sleep(client.config.LoopPeriod)
+		// increase wait time exponentially
+		interval *= 2
 	}
+
+	log.Errorf("action: wait_for_winners | result: fail | client_id: %v", client.config.ID)
+	return fmt.Errorf("max waits exceeded")
 }
 
-// batchProducer reads lines and groups them into batches
-func (client *Client) batchProducer(reader *bufio.Reader, out chan<- []Bet) {
-	defer close(out)
 
-	for client.is_running {
-		batch := make([]Bet, 0, client.config.Batchs)
-		memUsed := 0
-
-		for len(batch) < client.config.Batchs {
-			var line string
-			var err error
-
-			if client.lastLine != "" {
-				line = client.lastLine
-				client.lastLine = ""
-			} else {
-				line, err = reader.ReadString('\n')
-			}
-
-			if err == io.EOF {
-				if len(batch) > 0 {
-					out <- batch
-				}
-				return
-			}
-			if err != nil {
-				log.Errorf("action: read_line | result: fail | client_id: %v | error: %v", client.config.ID, err)
-				return
-			}
-
-			parts := strings.Split(strings.TrimSpace(line), ",")
-			if len(parts) != 5 {
-				continue
-			}
-
-			bet := Bet{
-				Agency:    client.config.ID,
-				Name:      parts[0],
-				Surname:   parts[1],
-				DNI:       parts[2],
-				Birthdate: parts[3],
-				Number:    parts[4],
-			}
-
-			if memUsed+bet.size() > MAX_BATCH_MEMORY {
-				client.lastLine = line
-				break
-			}
-
-			batch = append(batch, bet)
-			memUsed += bet.size()
-		}
-
-		if len(batch) > 0 {
-			out <- batch
-		}
+// getWinners sends the request to ask for the winners to the server
+func (client *Client) getWinners() (string, error) {
+	if err := send(client.conn, fmt.Sprintf("GETWINNERS;%v", client.config.ID)); err != nil {
+		return "", err
 	}
-}
 
+	return readUpToDelimiter(client.conn, "\000")
+}
 // serializeBatch converts bets into a string payload
 func serializeBatch(bets []Bet) string {
 	records := make([]string, len(bets))
 	for i, b := range bets {
-		records[i] = fmt.Sprintf("%s;%s;%s;%s;%s;%s", b.Agency, b.Name, b.Surname, b.DNI, b.Birthdate, b.Number)
+		records[i] = fmt.Sprintf("%s;%s;%s;%s;%s;%s",
+			b.Agency, b.Name, b.Surname, b.DNI, b.Birthdate, b.Number)
 	}
 	return strings.Join(records, "\n")
 }
 
 // size returns the size in bytes of the serialized bet
 func (b *Bet) size() int {
-	return len(fmt.Sprintf("%s;%s;%s;%s;%s;%s", b.Agency, b.Name, b.Surname, b.DNI, b.Birthdate, b.Number))
+	return len(fmt.Sprintf("%s;%s;%s;%s;%s;%s",
+		b.Agency, b.Name, b.Surname, b.DNI, b.Birthdate, b.Number))
 }

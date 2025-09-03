@@ -36,6 +36,7 @@ def generar_compose(clients):
         f"    entrypoint: {SERVER_ENTRYPOINT}",
         "    environment:",
         f"      - PYTHONUNBUFFERED={PYTHON_UNBUFFERED}",
+        f"      - TOTAL_AGENCIES={clients}",
         "    networks:",
         f"      - {NETWORK_NAME}",
         "    volumes:",
