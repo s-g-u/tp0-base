@@ -4,7 +4,7 @@ import signal
 import threading
 from common.utils import Bet, store_bets, load_bets, has_won
 from common.connection import send, read_up_to_delimiter
-
+NUM_BET_FIELDS = 6
 class Server:
     def __init__(self, port, listen_backlog, clients):
         # Initialize server socket
@@ -114,7 +114,8 @@ class Server:
         lines = raw_message.strip().splitlines()
         for line in lines:
             parts = line.strip().split(";")
-            if len(parts) != 6:
+            
+            if len(parts) != NUM_BET_FIELDS:
                 errors += 1
                 continue
 

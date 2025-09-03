@@ -14,6 +14,7 @@ import (
 
 
 const MAX_WAITS = 10
+const BET_FIELDS = 5
 
 var log = logging.MustGetLogger("log")
 
@@ -62,7 +63,7 @@ func (client *Client) createBatch(lines []string, startIndex *int) ([]Bet, error
 		}
 
 		parts := strings.Split(line, ",")
-		if len(parts) != 5 {
+		if len(parts) != BET_FIELDS {
 			continue
 		}
 

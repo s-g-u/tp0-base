@@ -11,6 +11,7 @@ const NOWINNER_MESSAGE = "NOWINNER"
 const ERR_MESSAGE = "ERR"
 const WINNERS_MESSAGE = "WINNERS"
 const WRONG_MESSAGE = "WRONG"
+const ERR_PARTS_EXPECTED = 2
 
 // Bet represents a bet message
 type Bet struct {
@@ -33,7 +34,7 @@ func (client *Client) handleServerResponse(reply string) {
 
 	case strings.HasPrefix(reply, ERR_MESSAGE):
 		parts := strings.Split(reply, ";")
-		if len(parts) == 2 {
+		if len(parts) == ERR_PARTS_EXPECTED {
 			log.Errorf("action: receive_message | result: fail | number_of_errors: %s", parts[1])
 		} else {
 			log.Errorf("action: receive_message | result: fail | message: malformed_error")
