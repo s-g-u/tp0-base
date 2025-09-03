@@ -257,7 +257,7 @@ Para enviar la apuesta, el cliente toma todos los datos desde variables de entor
 * `ERR;cantidad` si hubo error.
 
 
-### Ejercicio 5
+## Ejercicio 5
 
 El cliente:
 
