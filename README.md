@@ -293,3 +293,156 @@ server   | action: reading_bet | result: success | message: 1;MARTA;PEREZ;102345
 server   | Stored bet: dni=10234567, number=9876
 server   | action: apuesta_almacenada | result: success | dni: 10234567 | numero: 9876
 ```
+## Ejercicio 6
+
+En esta etapa se modificaron los clientes para que no envíen cada apuesta de forma individual, sino que agrupen varias apuestas en un mismo mensaje. Esta modalidad, conocida como *batch processing* o *chunking*, tiene como objetivo optimizar el tiempo de transmisión y reducir la sobrecarga en la comunicación cliente-servidor.
+
+Cada cliente obtiene sus apuestas desde el archivo correspondiente `agency-{N}.csv`, inyectado dentro del contenedor por medio de un volumen de Docker. Esto asegura que la información persista fuera de la imagen y que cada cliente utilice el archivo que le corresponde, manteniendo la convención definida por la cátedra.
+
+El cliente lee línea por línea del archivo y va agrupando apuestas hasta alcanzar dos límites:
+
+1. La cantidad máxima configurada en `config.yaml` (`batch.maxAmount`).
+2. El tamaño máximo de memoria permitido (`8 KB`), para evitar que un único batch genere un mensaje demasiado grande.
+
+Una vez formado un batch, este se serializa en un único string con formato `Agency;Name;Surname;DNI;Birthdate;Number`, separado por saltos de línea, y se envía al servidor en un solo envío TCP.
+
+Del lado del servidor, se recibe y procesa el batch completo:
+
+* Si todas las apuestas son válidas, el servidor almacena la información y responde con `ACK`, además de registrar en logs:
+
+```
+action: apuesta_recibida | result: success | cantidad: {CANTIDAD_DE_APUESTAS}
+```
+
+* Si alguna de las apuestas es inválida, el servidor rechaza el batch completo y responde con un código de error (`ERR;N`), registrando:
+
+```
+action: apuesta_recibida | result: fail | cantidad: {CANTIDAD_DE_APUESTAS}
+```
+
+De esta manera se garantiza consistencia: un batch se procesa únicamente si todas sus apuestas son correctas.
+
+### Ejemplo de ejecución
+
+El proyecto se levanta usando Docker Compose con el siguiente comando:
+
+```bash
+make docker-compose-up
+```
+
+Una vez levantados los contenedores, se pueden observar los logs en tiempo real con:
+
+```bash
+make docker-compose-logs
+```
+
+Ejemplo de logs del cliente y servidor en ejecución:
+
+**Cliente**
+
+```
+client1  | 2025-09-03 06:52:28 INFO     action: config | result: success | client_id: 1 | server_address: server:12345 | loop_amount: 5 | loop_period: 5s | log_level: INFO | batch: 10
+client1  | 2025-09-03 06:52:28 INFO     action: batch_sent | result: success | client_id: 1 | batch_size: 10
+client1  | 2025-09-03 06:52:33 INFO     action: batch_sent | result: success | client_id: 1 | batch_size: 10
+...
+```
+
+**Servidor**
+
+```
+server   | 2025-09-03 06:52:28 INFO     action: accept_connections | result: success | ip: 172.25.125.3
+server   | 2025-09-03 06:52:28 INFO     action: apuesta_recibida | result: success | cantidad: 10
+server   | 2025-09-03 06:52:33 INFO     action: accept_connections | result: success | ip: 172.25.125.3
+server   | 2025-09-03 06:52:33 INFO     action: apuesta_recibida | result: success | cantidad: 10
+...
+```
+
+Esto confirma que los clientes generan y envían *batchs* de tamaño 10, y que el servidor los procesa de manera correcta, manteniendo la lógica de validación y persistencia definida por el protocolo.
+
+### Ejercicio 7:
+
+El objetivo de este ejercicio fue modificar el sistema cliente-servidor para que los clientes notifiquen al servidor una vez que hayan enviado todas sus apuestas, y luego puedan consultar los resultados del sorteo correspondientes a su agencia. El servidor debe esperar la notificación de todas las agencias antes de realizar el sorteo, garantizando que no se compartan resultados parciales con los clientes.
+
+#### Descripción del protocolo de comunicación
+
+El protocolo entre clientes y servidor funciona de la siguiente manera:
+
+1. **Envío de apuestas**:
+
+   * Cada cliente lee un archivo CSV con las apuestas de su agencia.
+   * Las apuestas se envían en **batches**, respetando un límite de memoria por batch (`MAX_BATCH_MEMORY`) y un tamaño máximo de registros (`Batchs`).
+   * Cada batch es enviado al servidor mediante TCP.
+   * El servidor valida cada apuesta usando la función provista `store_bets(...)`. Si todas son correctas, responde con `ACK`; si hay errores, responde con `ERR;{cantidad_de_errores}`.
+   * Los logs reflejan cada envío con:
+
+     ```
+     action: batch_send | result: success
+     action: apuesta_recibida | result: success | cantidad: {N}
+     ```
+
+2. **Notificación de fin de envíos**:
+
+   * Una vez que un cliente terminó de enviar todas sus apuestas, realiza una solicitud `GETWINNERS;{AGENCY_NUMBER}`.
+   * El servidor acumula las agencias que notificaron haber completado sus envíos en `_completed_agencies`.
+   * Si aún no han notificado todas las agencias, responde con `NOWINNER`.
+   * Cuando todas las agencias notifican haber terminado, el servidor realiza el sorteo:
+
+     * Verifica cada apuesta usando `has_won(...)`.
+     * Devuelve únicamente los DNIs ganadores de la agencia que hizo la solicitud, en el formato `WINNERS;DNI1;DNI2;...`.
+     * El log del servidor muestra:
+
+       ```
+       action: lottery | result: success
+       ```
+   * El cliente recibe los ganadores y registra:
+
+     ```
+     action: consulta_ganadores | result: success | cant_ganadores: {CANT}
+     ```
+
+### Ejemplo de ejecución
+
+El proyecto se levanta usando Docker Compose con el siguiente comando:
+
+```bash
+make docker-compose-up
+```
+
+Una vez levantados los contenedores, se pueden observar los logs en tiempo real con:
+
+```bash
+make docker-compose-logs
+```
+
+#### Ejemplo de salida de logs
+
+Del log que se obtuvo se puede observar:
+
+* Cliente 1 envía múltiples batches:
+
+  ```
+  client1  | 2025-09-03 07:03:51 INFO     action: batch_send | result: success
+  ```
+* Servidor acepta conexiones y recibe apuestas:
+
+  ```
+  server   | 2025-09-03 07:03:51 INFO     action: accept_connections | result: success | ip: 172.25.125.6
+  server   | 2025-09-03 07:03:51 INFO     action: apuesta_recibida | result: success | cantidad: 10
+  ```
+* Clientes que consultan los ganadores antes de que todas las agencias terminen reciben:
+
+  ```
+  client5  | 2025-09-03 07:03:54 INFO     action: sleeping | result: success
+  ```
+
+  (equivalente a `NOWINNER`).
+* Una vez completadas todas las notificaciones, el servidor realiza el sorteo:
+
+  ```
+  server   | 2025-09-03 07:03:55 INFO     action: lottery | result: success
+  ```
+* Cada cliente recibe finalmente los DNIs ganadores de su agencia:
+
+  ```
+  client1  | 2025-09-03 07:03:55 INFO     action: consulta_ganadores | result: success | cant_ganadores: 2
+  ```
