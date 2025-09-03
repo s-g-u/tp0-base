@@ -1,7 +1,8 @@
 import socket
 import logging
 import signal
-from common.utils import Bet,store_bets, load_bets, has_won
+import threading
+from common.utils import Bet, store_bets, load_bets, has_won
 from common.connection import send, read_up_to_delimiter
 
 class Server:
@@ -14,19 +15,23 @@ class Server:
         self._last_client_socket = None
         self._completed_agencies = set()
         self._clients = clients
+        self._lock = threading.Lock()
 
         signal.signal(signal.SIGTERM, self.__shutdown_server)
 
     def run(self):
         """
-        Main server loop: keeps accepting clients and processing bets
+        Main server loop: accepts clients and handles them in parallel threads
         """
         try:
             while self._is_running:
                 client_socket = self.__accept_new_connection()
                 if client_socket:
                     self._last_client_socket = client_socket
-                    self.__handle_client_connection()
+                    threading.Thread(
+                        target=self.__handle_client_connection,
+                        daemon=True
+                    ).start()
         except Exception as e:
             logging.error(f"action: server_run | result: fail | error: {e}")
         finally:
@@ -35,7 +40,7 @@ class Server:
     def __handle_client_connection(self):
         """
         Handles communication with a single client: receives data, processes it, and sends a response.
-        The socket is always closed at the end, regardless of the outcome.
+        This runs in a separate thread for each client.
         """
         sock = self._last_client_socket
         reply = None
@@ -43,10 +48,12 @@ class Server:
             incoming = read_up_to_delimiter(sock, "\0")
 
             if incoming.startswith("GETWINNERS"):
-                reply = self.__get_winners(incoming)
+                with self._lock:
+                    reply = self.__get_winners(incoming)
             else:
                 apuestas, errores = self.__get_bets(incoming)
-                store_bets(apuestas)
+                with self._lock:
+                    store_bets(apuestas)
 
                 if errores:
                     logging.error(
@@ -74,7 +81,6 @@ class Server:
             finally:
                 self._last_client_socket = None
 
-    
     def __get_winners(self, message): 
             """
             Get the Winners bets from a Message in the format WINNERS;AGENCY_NUMBER
@@ -94,11 +100,11 @@ class Server:
                             message = message + bet.document + ";"
                 logging.info(f"action: lottery | result: success")
                 return message[:-1]
-        
+
     def __get_bets(self, raw_message):
         """
         Converts a raw bets message into a list of Bet objects,
-        while counting any lines that failed validation.
+        counting any lines that failed validation
         """
         valid_bets = []
         errors = 0
@@ -106,13 +112,11 @@ class Server:
         lines = raw_message.strip().splitlines()
         for line in lines:
             parts = line.strip().split(";")
-            
             if len(parts) != 6:
                 errors += 1
                 continue
 
             agency, name, surname, dni, birthdate, number = parts
-
             if not (agency.isdigit() and number.isdigit()):
                 errors += 1
                 continue
