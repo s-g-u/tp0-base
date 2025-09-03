@@ -5,7 +5,7 @@ import signal
 from common.utils import Bet, store_bets
 from common.connection import send, read_up_to_delimiter
 
-
+NUM_BET_FIELDS = 6
 class Server:
     def __init__(self, port, listen_backlog):
         # Initialize server socket
@@ -92,7 +92,7 @@ class Server:
         Returns None if parsing fails.
         """
         fields = line.strip().split(";")
-        if len(fields) != 6:
+        if len(fields) != NUM_BET_FIELDS:
             logging.warning(f"action: parse_bet | result: fail | line: {line}")
             return None
 

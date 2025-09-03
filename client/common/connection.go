@@ -4,6 +4,8 @@ import (
     "net"
 )
 
+const BUFFER_SIZE = 1024
+
 // send writes a string message to the TCP connection
 func send(conn net.Conn, message string) error {
     _, err := conn.Write([]byte(message + "\000"))
@@ -12,7 +14,7 @@ func send(conn net.Conn, message string) error {
 
 // readUpToDelimiter reads from connection until the delimiter is found
 func readUpToDelimiter(conn net.Conn, delim string) (string, error) {
-    buf := make([]byte, 0, 1024)
+    buf := make([]byte, 0, BUFFER_SIZE)
     tmp := make([]byte, 1)
     for {
         _, err := conn.Read(tmp)

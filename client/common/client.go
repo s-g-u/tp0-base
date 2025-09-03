@@ -14,6 +14,7 @@ import (
 	"github.com/op/go-logging"
 )
 
+const BET_FIELDS = 5
 var log = logging.MustGetLogger("log")
 
 // ClientConfig Configuration used by the client
@@ -145,7 +146,7 @@ func (client *Client) batchProducer(reader *bufio.Reader, out chan<- []Bet) {
 			}
 
 			parts := strings.Split(strings.TrimSpace(line), ",")
-			if len(parts) != 5 {
+			if len(parts) != BET_FIELDS {
 				continue
 			}
 
