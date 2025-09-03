@@ -359,7 +359,7 @@ server   | 2025-09-03 06:52:33 INFO     action: apuesta_recibida | result: succe
 
 Esto confirma que los clientes generan y envían *batchs* de tamaño 10, y que el servidor los procesa de manera correcta, manteniendo la lógica de validación y persistencia definida por el protocolo.
 
-### Ejercicio 7:
+## Ejercicio 7:
 
 El objetivo de este ejercicio fue modificar el sistema cliente-servidor para que los clientes notifiquen al servidor una vez que hayan enviado todas sus apuestas, y luego puedan consultar los resultados del sorteo correspondientes a su agencia. El servidor debe esperar la notificación de todas las agencias antes de realizar el sorteo, garantizando que no se compartan resultados parciales con los clientes.
 
