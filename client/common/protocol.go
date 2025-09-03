@@ -4,6 +4,20 @@ import (
 	"fmt"
 	"strings"
 )
+
+const ACK = "ACK"
+const MAX_BATCH_MEMORY = 8192
+
+// Bet represents a bet message
+type Bet struct {
+	Agency    string
+	Name      string
+	Surname   string
+	DNI       string
+	Birthdate string
+	Number    string
+}
+
 // serializeBatch converts bets into a string payload
 func serializeBatch(bets []Bet) string {
 	records := make([]string, len(bets))

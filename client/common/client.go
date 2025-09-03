@@ -14,9 +14,6 @@ import (
 	"github.com/op/go-logging"
 )
 
-const ACK = "ACK"
-const MAX_BATCH_MEMORY = 8192
-
 var log = logging.MustGetLogger("log")
 
 // ClientConfig Configuration used by the client
@@ -26,16 +23,6 @@ type ClientConfig struct {
 	LoopAmount    int
 	LoopPeriod    time.Duration
 	Batchs        int
-}
-
-// Bet represents a bet message
-type Bet struct {
-	Agency    string
-	Name      string
-	Surname   string
-	DNI       string
-	Birthdate string
-	Number    string
 }
 
 // Client Entity that encapsulates client behavior
