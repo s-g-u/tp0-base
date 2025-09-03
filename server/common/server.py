@@ -33,7 +33,7 @@ class Server:
             self.__shutdown_server(None, None)
 
     def __handle_client_connection(self):
-         """
+        """
         Handles communication with a single client: receives data, processes it, and sends a response.
         The socket is always closed at the end, regardless of the outcome.
         """
