@@ -293,3 +293,69 @@ server   | action: reading_bet | result: success | message: 1;MARTA;PEREZ;102345
 server   | Stored bet: dni=10234567, number=9876
 server   | action: apuesta_almacenada | result: success | dni: 10234567 | numero: 9876
 ```
+## Ejercicio 6
+
+En esta etapa se modificaron los clientes para que no envíen cada apuesta de forma individual, sino que agrupen varias apuestas en un mismo mensaje. Esta modalidad, conocida como *batch processing* o *chunking*, tiene como objetivo optimizar el tiempo de transmisión y reducir la sobrecarga en la comunicación cliente-servidor.
+
+Cada cliente obtiene sus apuestas desde el archivo correspondiente `agency-{N}.csv`, inyectado dentro del contenedor por medio de un volumen de Docker. Esto asegura que la información persista fuera de la imagen y que cada cliente utilice el archivo que le corresponde, manteniendo la convención definida por la cátedra.
+
+El cliente lee línea por línea del archivo y va agrupando apuestas hasta alcanzar dos límites:
+
+1. La cantidad máxima configurada en `config.yaml` (`batch.maxAmount`).
+2. El tamaño máximo de memoria permitido (`8 KB`), para evitar que un único batch genere un mensaje demasiado grande.
+
+Una vez formado un batch, este se serializa en un único string con formato `Agency;Name;Surname;DNI;Birthdate;Number`, separado por saltos de línea, y se envía al servidor en un solo envío TCP.
+
+Del lado del servidor, se recibe y procesa el batch completo:
+
+* Si todas las apuestas son válidas, el servidor almacena la información y responde con `ACK`, además de registrar en logs:
+
+```
+action: apuesta_recibida | result: success | cantidad: {CANTIDAD_DE_APUESTAS}
+```
+
+* Si alguna de las apuestas es inválida, el servidor rechaza el batch completo y responde con un código de error (`ERR;N`), registrando:
+
+```
+action: apuesta_recibida | result: fail | cantidad: {CANTIDAD_DE_APUESTAS}
+```
+
+De esta manera se garantiza consistencia: un batch se procesa únicamente si todas sus apuestas son correctas.
+
+### Ejemplo de ejecución
+
+El proyecto se levanta usando Docker Compose con el siguiente comando:
+
+```bash
+make docker-compose-up
+```
+
+Una vez levantados los contenedores, se pueden observar los logs en tiempo real con:
+
+```bash
+make docker-compose-logs
+```
+
+Ejemplo de logs del cliente y servidor en ejecución:
+
+**Cliente**
+
+```
+client1  | 2025-09-03 06:52:28 INFO     action: config | result: success | client_id: 1 | server_address: server:12345 | loop_amount: 5 | loop_period: 5s | log_level: INFO | batch: 10
+client1  | 2025-09-03 06:52:28 INFO     action: batch_sent | result: success | client_id: 1 | batch_size: 10
+client1  | 2025-09-03 06:52:33 INFO     action: batch_sent | result: success | client_id: 1 | batch_size: 10
+...
+```
+
+**Servidor**
+
+```
+server   | 2025-09-03 06:52:28 INFO     action: accept_connections | result: success | ip: 172.25.125.3
+server   | 2025-09-03 06:52:28 INFO     action: apuesta_recibida | result: success | cantidad: 10
+server   | 2025-09-03 06:52:33 INFO     action: accept_connections | result: success | ip: 172.25.125.3
+server   | 2025-09-03 06:52:33 INFO     action: apuesta_recibida | result: success | cantidad: 10
+...
+```
+
+Esto confirma que los clientes generan y envían *batchs* de tamaño 10, y que el servidor los procesa de manera correcta, manteniendo la lógica de validación y persistencia definida por el protocolo.
+
