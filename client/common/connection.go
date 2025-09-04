@@ -4,24 +4,27 @@ import (
     "net"
 )
 const BUFFER_SIZE = 1024
-// send writes a string message to the TCP connection,
-// ensuring that the full payload is delivered (handling short writes).
+// Send writes the entire message to the TCP connection,
+// appending a null terminator, handling short writes explicitly.
 func send(conn net.Conn, message string) error {
-    data := []byte(message + "\000")
-    totalSent := 0
+	message += "\000"
+	data := []byte(message)
 
-    for totalSent < len(data) {
-        n, err := conn.Write(data[totalSent:])
-        if err != nil {
-            return err
-        }
-        if n == 0 {
-            return io.ErrUnexpectedEOF
-        }
-        totalSent += n
-    }
-    return nil
+	totalWritten := 0
+	for totalWritten < len(data) {
+		n, err := conn.Write(data[totalWritten:])
+		if err != nil {
+			return err
+		}
+		if n == 0 {
+			return &net.OpError{Op: "write", Net: "tcp", Err: err}
+		}
+		totalWritten += n
+	}
+
+	return nil
 }
+
 
 // readUpToDelimiter reads from connection until the delimiter is found
 func readUpToDelimiter(conn net.Conn, delim string) (string, error) {
