@@ -10,7 +10,6 @@ services:
       - testing_net
     volumes:
       - ./server/config.ini:/config.ini
-      - ./.data:/.data
   client1:
     container_name: client1
     image: client:latest
@@ -29,7 +28,6 @@ services:
     volumes:
       - ./client/config.yaml:/config.yaml
       - ./.data:/.data
-
 networks:
   testing_net:
     ipam:
