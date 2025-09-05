@@ -1,7 +1,9 @@
 package common
 
 import (
+	"bufio"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"os/signal"
@@ -11,7 +13,6 @@ import (
 
 	"github.com/op/go-logging"
 )
-
 
 const MAX_WAITS = 10
 const BET_FIELDS = 5
@@ -26,7 +27,6 @@ type ClientConfig struct {
 	LoopPeriod    time.Duration
 	Batchs        int
 }
-
 
 // Client Entity that encapsulates client behavior
 type Client struct {
@@ -49,15 +49,30 @@ func NewClient(config ClientConfig) *Client {
 	return c
 }
 
-// createBatch reads lines from a slice of strings and returns a batch as []Bet
-func (client *Client) createBatch(lines []string, startIndex *int) ([]Bet, error) {
+// createBatch builds a batch from the reader
+func (client *Client) createBatch(reader *bufio.Reader) ([]Bet, error) {
 	batch := make([]Bet, 0, client.config.Batchs)
 	usedMem := 0
 
-	for *startIndex < len(lines) && len(batch) < client.config.Batchs {
-		line := strings.TrimSpace(lines[*startIndex])
-		*startIndex++
+	for len(batch) < client.config.Batchs {
+		var line string
+		var err error
 
+		if client.lastLine != "" {
+			line = client.lastLine
+			client.lastLine = ""
+		} else {
+			line, err = reader.ReadString('\n')
+		}
+
+		if err == io.EOF {
+			return batch, nil
+		}
+		if err != nil {
+			return batch, err
+		}
+
+		line = strings.TrimSpace(line)
 		if line == "" {
 			continue
 		}
@@ -84,7 +99,6 @@ func (client *Client) createBatch(lines []string, startIndex *int) ([]Bet, error
 		batch = append(batch, newBet)
 		usedMem += newBet.size()
 	}
-
 	return batch, nil
 }
 
@@ -109,19 +123,17 @@ func (client *Client) sendBatch(batch []Bet) error {
 	return nil
 }
 
-// sendBatches reads lines and sends all batches sequentially
-func (client *Client) sendBatchesFromFile(lines []string) error {
-	startIndex := 0
+// sendBatches reads batches from reader sequentially and sends them
+func (client *Client) sendBatches(reader *bufio.Reader) error {
 	for client.is_running {
 		if err := client.createClientSocket(); err != nil {
 			log.Criticalf("action: connect | result: fail | client_id: %v | error: %v",
 				client.config.ID, err)
 			return err
 		}
-
 		defer client.conn.Close()
 
-		batch, err := client.createBatch(lines, &startIndex)
+		batch, err := client.createBatch(reader)
 		if err != nil {
 			log.Errorf("action: create_batch | result: fail | client_id: %v | error: %v",
 				client.config.ID, err)
@@ -167,16 +179,17 @@ func (client *Client) StartClientLoop() {
 	go client.shutdownClientHandler()
 
 	filepath := fmt.Sprintf("/.data/agency-%v.csv", client.config.ID)
-	content, err := os.ReadFile(filepath)
+	file, err := os.Open(filepath)
 	if err != nil {
-		log.Errorf("action: read_file | result: fail | client_id: %v | error: %v",
+		log.Errorf("action: open_file | result: fail | client_id: %v | error: %v",
 			client.config.ID, err)
 		return
 	}
+	defer file.Close()
 
-	lines := strings.Split(string(content), "\n")
+	reader := bufio.NewReader(file)
 
-	if err := client.sendBatchesFromFile(lines); err != nil {
+	if err := client.sendBatches(reader); err != nil {
 		log.Errorf("action: sending_batches | result: fail | client_id: %v | error: %v",
 			client.config.ID, err)
 		return
@@ -229,7 +242,6 @@ func (client *Client) waitForWinners() error {
 		return fmt.Errorf("client shutdown")
 	}
 }
-
 
 // getWinners sends the request to ask for the winners to the server
 func (client *Client) getWinners() (string, error) {

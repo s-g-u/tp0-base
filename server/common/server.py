@@ -4,7 +4,10 @@ import signal
 import threading
 from common.utils import Bet, store_bets, load_bets, has_won
 from common.connection import send, read_up_to_delimiter
+
 NUM_BET_FIELDS = 6
+
+
 class Server:
     def __init__(self, port, listen_backlog, clients):
         # Initialize server socket
@@ -15,6 +18,8 @@ class Server:
         self._completed_agencies = set()
         self._clients = clients
         self._lock = threading.Lock()
+        self._threads = []    
+        self._connections = []  
 
         signal.signal(signal.SIGTERM, self.__shutdown_server)
 
@@ -26,11 +31,14 @@ class Server:
             while self._is_running:
                 client_socket = self.__accept_new_connection()
                 if client_socket:
-                    threading.Thread(
+                    self._connections.append(client_socket)
+                    t = threading.Thread(
                         target=self.__handle_client_connection,
                         args=(client_socket,),
-                        daemon=True
-                    ).start()
+                        daemon=False  
+                    )
+                    t.start()
+                    self._threads.append(t)
         except Exception as e:
             logging.error(f"action: server_run | result: fail | error: {e}")
         finally:
@@ -80,8 +88,6 @@ class Server:
                 logging.error(f"action: close_socket | result: fail | error: {e}")
             finally:
                 logging.info("action: shutdown_client | result: success")
-
-
 
     def __get_winners(self, message): 
             """
@@ -143,13 +149,32 @@ class Server:
 
     def __shutdown_server(self, signum, frame):
         """
-        Gracefully shutdown the server and client socket
+        Gracefully shutdown the server and client sockets, waiting for all threads
         """
+        if not self._is_running:
+            return
         self._is_running = False
 
-        if self._server_socket:
-            self._server_socket.close()
-            self._server_socket = None
-            logging.info("action: shutdown_server | result: success")
+        logging.info("action: shutdown_server | result: in_progress")
 
-        logging.info("action: shutdown | result: success")
+        if self._server_socket:
+            try:
+                self._server_socket.close()
+            except Exception as e:
+                logging.error(f"action: close_server_socket | result: fail | error: {e}")
+            self._server_socket = None
+
+        for conn in self._connections:
+            try:
+                conn.shutdown(socket.SHUT_RDWR)
+                conn.close()
+            except Exception as e:
+                logging.error(f"action: close_client_socket | result: fail | error: {e}")
+
+        for t in self._threads:
+            try:
+                t.join(timeout=2)
+            except Exception as e:
+                logging.error(f"action: join_thread | result: fail | error: {e}")
+
+        logging.info("action: shutdown_server | result: success")

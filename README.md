@@ -1,3 +1,11 @@
+# IMPORTANTE: Las correcciones habladas en la demo fueron aplicadas en la rama ej8.
+
+Lectura de archivo: ahora se procesa línea a línea, evitando cargar todo el archivo en memoria.
+
+Manejo de conexiones y threads: cada conexión se atiende en un thread joinable, y en el apagado se cierran las conexiones activas y se espera su finalización.
+
+Graceful quit: al recibir SIGTERM, el servidor deja de aceptar conexiones, cierra los sockets abiertos y espera a que todos los threads terminen antes de liberar recursos.
+
 # TP0: Docker + Comunicaciones + Concurrencia
 
 En el presente repositorio se provee un esqueleto básico de cliente/servidor, en donde todas las dependencias del mismo se encuentran encapsuladas en containers. Los alumnos deberán resolver una guía de ejercicios incrementales, teniendo en cuenta las condiciones de entrega descritas al final de este enunciado.
